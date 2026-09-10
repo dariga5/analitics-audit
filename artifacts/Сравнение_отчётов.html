@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<!-- saved from url=(0022)http://localhost:8080/ -->
+<html lang="ru"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Сравнение отчётов</title>
+  <link rel="stylesheet" href="./Сравнение_отчётов_files/style.css">
+</head>
+<body>
+  <header>
+    <h1>Сравнение двух отчётов</h1>
+    <p class="hint">Перетащите CSV в обе зоны и нажмите «Сравнить».</p>
+  </header>
+
+  <section class="drops">
+    <div class="drop loaded" id="dropA" data-slot="a">
+      <input type="file" id="fileA" accept=".csv" hidden="">
+      <div class="drop__label">Отчёт A</div>
+      <div class="drop__filename" id="nameA">report.csv</div>
+    </div>
+    <div class="drop loaded" id="dropB" data-slot="b">
+      <input type="file" id="fileB" accept=".csv" hidden="">
+      <div class="drop__label">Отчёт B</div>
+      <div class="drop__filename" id="nameB">report_fixed.csv</div>
+    </div>
+  </section>
+
+  <section class="actions">
+    <button id="compareBtn">Сравнить</button>
+    <span id="status" class="status"></span>
+  </section>
+
+  <section id="result" class="result">
+    <div id="summary" class="summary">
+    <div>Строк в <b>report.csv</b>: <b>17</b></div>
+    <div>Строк в <b>report_fixed.csv</b>: <b>17</b></div>
+    <div>Только в A: <b>0</b></div>
+    <div>Только в B: <b>1</b></div>
+    <div>Расхождений: <b>7</b></div>
+    <div>Совпало: <b>9</b></div>
+  </div>
+    <div id="diffBlocks"><div class="block block--empty">
+      <div class="block__title">Только в «report.csv»: нет</div>
+    </div><div class="block block--only-b">
+    <div class="block__title">Только в «report_fixed.csv» (1)</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>строка</th><th>client_id</th><th>project_ids</th><th>project_name</th><th>service_type</th><th>term_months</th><th>flight_no</th><th>flight_start</th><th>flight_end</th><th>last_active_month</th><th>status</th><th>report_generated_at</th></tr></thead>
+        <tbody>
+    <tr>
+      <td class="row-num">15</td>
+      <td>340</td><td>340</td><td>Сигма Групп</td><td>Управление репутацией</td><td>6</td><td>2</td><td>2024-06-01</td><td>2024-11-01</td><td>2024-09-01</td><td>неизвестно</td><td>2025-09-01</td>
+    </tr>
+  </tbody>
+      </table>
+    </div>
+  </div><div class="block block--diff">
+    <div class="block__title">Расхождения (7)</div>
+    <div class="row-diff">
+      <div class="row-diff__key">
+        <span class="row-diff__key-label">330|330|1</span>
+        <span class="row-diff__row-nums">
+          строка 10 в «report.csv» ·
+          строка 10 в «report_fixed.csv»
+        </span>
+      </div>
+      <div class="table-wrap">
+        <table class="row-diff__table">
+          <thead>
+            <tr>
+              <th class="row-diff__label">файл</th>
+              <th class="row-diff__label">№</th>
+              <th>service_type</th><th>term_months</th><th>flight_end</th><th>last_active_month</th><th>status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row-diff__label row-diff__label--a">report.csv</td>
+              <td class="row-diff__label row-diff__label--a">10</td>
+              <td class="cell cell--old">Мониторинг СМИ</td><td class="cell cell--old">12</td><td class="cell cell--old">2024-12-01</td><td class="cell cell--old">2024-12-01</td><td class="cell cell--old">пролонгировано</td>
+            </tr>
+            <tr>
+              <td class="row-diff__label row-diff__label--b">report_fixed.csv</td>
+              <td class="row-diff__label row-diff__label--b">10</td>
+              <td class="cell cell--new">Крауд-маркетинг</td><td class="cell cell--new">6</td><td class="cell cell--new">2024-06-01</td><td class="cell cell--new">2024-06-01</td><td class="cell cell--new">непролонгировано</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div><div class="row-diff">
+      <div class="row-diff__key">
+        <span class="row-diff__key-label">330|330|2</span>
+        <span class="row-diff__row-nums">
+          строка 11 в «report.csv» ·
+          строка 11 в «report_fixed.csv»
+        </span>
+      </div>
+      <div class="table-wrap">
+        <table class="row-diff__table">
+          <thead>
+            <tr>
+              <th class="row-diff__label">файл</th>
+              <th class="row-diff__label">№</th>
+              <th>flight_start</th><th>flight_end</th><th>status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row-diff__label row-diff__label--a">report.csv</td>
+              <td class="row-diff__label row-diff__label--a">11</td>
+              <td class="cell cell--old">2025-01-01</td><td class="cell cell--old">2025-12-01</td><td class="cell cell--old">непролонгировано</td>
+            </tr>
+            <tr>
+              <td class="row-diff__label row-diff__label--b">report_fixed.csv</td>
+              <td class="row-diff__label row-diff__label--b">11</td>
+              <td class="cell cell--new">2024-11-01</td><td class="cell cell--new">2025-10-01</td><td class="cell cell--new">неизвестно</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div><div class="row-diff">
+      <div class="row-diff__key">
+        <span class="row-diff__key-label">340|340|1</span>
+        <span class="row-diff__row-nums">
+          строка 15 в «report.csv» ·
+          строка 14 в «report_fixed.csv»
+        </span>
+      </div>
+      <div class="table-wrap">
+        <table class="row-diff__table">
+          <thead>
+            <tr>
+              <th class="row-diff__label">файл</th>
+              <th class="row-diff__label">№</th>
+              <th>flight_start</th><th>flight_end</th><th>last_active_month</th><th>status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row-diff__label row-diff__label--a">report.csv</td>
+              <td class="row-diff__label row-diff__label--a">15</td>
+              <td class="cell cell--old">2024-06-01</td><td class="cell cell--old">2024-11-01</td><td class="cell cell--old">2024-09-01</td><td class="cell cell--old">непролонгировано</td>
+            </tr>
+            <tr>
+              <td class="row-diff__label row-diff__label--b">report_fixed.csv</td>
+              <td class="row-diff__label row-diff__label--b">14</td>
+              <td class="cell cell--new">2024-01-01</td><td class="cell cell--new">2024-06-01</td><td class="cell cell--new">2024-04-01</td><td class="cell cell--new">отвал</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div><div class="row-diff">
+      <div class="row-diff__key">
+        <span class="row-diff__key-label">321|320|321|2</span>
+        <span class="row-diff__row-nums">
+          строка 9 в «report.csv» ·
+          строка 9 в «report_fixed.csv»
+        </span>
+      </div>
+      <div class="table-wrap">
+        <table class="row-diff__table">
+          <thead>
+            <tr>
+              <th class="row-diff__label">файл</th>
+              <th class="row-diff__label">№</th>
+              <th>status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row-diff__label row-diff__label--a">report.csv</td>
+              <td class="row-diff__label row-diff__label--a">9</td>
+              <td class="cell cell--old">непролонгировано</td>
+            </tr>
+            <tr>
+              <td class="row-diff__label row-diff__label--b">report_fixed.csv</td>
+              <td class="row-diff__label row-diff__label--b">9</td>
+              <td class="cell cell--new">неизвестно</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div><div class="row-diff">
+      <div class="row-diff__key">
+        <span class="row-diff__key-label">331|331|1</span>
+        <span class="row-diff__row-nums">
+          строка 12 в «report.csv» ·
+          строка 12 в «report_fixed.csv»
+        </span>
+      </div>
+      <div class="table-wrap">
+        <table class="row-diff__table">
+          <thead>
+            <tr>
+              <th class="row-diff__label">файл</th>
+              <th class="row-diff__label">№</th>
+              <th>service_type</th><th>term_months</th><th>flight_end</th><th>status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row-diff__label row-diff__label--a">report.csv</td>
+              <td class="row-diff__label row-diff__label--a">12</td>
+              <td class="cell cell--old">Управление репутацией</td><td class="cell cell--old">6</td><td class="cell cell--old">2024-06-01</td><td class="cell cell--old">пролонгировано</td>
+            </tr>
+            <tr>
+              <td class="row-diff__label row-diff__label--b">report_fixed.csv</td>
+              <td class="row-diff__label row-diff__label--b">12</td>
+              <td class="cell cell--new">Мониторинг СМИ</td><td class="cell cell--new">12</td><td class="cell cell--new">2024-12-01</td><td class="cell cell--new">неизвестно</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div><div class="row-diff">
+      <div class="row-diff__key">
+        <span class="row-diff__key-label">351|351|1</span>
+        <span class="row-diff__row-nums">
+          строка 17 в «report.csv» ·
+          строка 17 в «report_fixed.csv»
+        </span>
+      </div>
+      <div class="table-wrap">
+        <table class="row-diff__table">
+          <thead>
+            <tr>
+              <th class="row-diff__label">файл</th>
+              <th class="row-diff__label">№</th>
+              <th>status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row-diff__label row-diff__label--a">report.csv</td>
+              <td class="row-diff__label row-diff__label--a">17</td>
+              <td class="cell cell--old">неизвестно</td>
+            </tr>
+            <tr>
+              <td class="row-diff__label row-diff__label--b">report_fixed.csv</td>
+              <td class="row-diff__label row-diff__label--b">17</td>
+              <td class="cell cell--new">непролонгировано</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div><div class="row-diff">
+      <div class="row-diff__key">
+        <span class="row-diff__key-label">350|350|1</span>
+        <span class="row-diff__row-nums">
+          строка 16 в «report.csv» ·
+          строка 16 в «report_fixed.csv»
+        </span>
+      </div>
+      <div class="table-wrap">
+        <table class="row-diff__table">
+          <thead>
+            <tr>
+              <th class="row-diff__label">файл</th>
+              <th class="row-diff__label">№</th>
+              <th>status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row-diff__label row-diff__label--a">report.csv</td>
+              <td class="row-diff__label row-diff__label--a">16</td>
+              <td class="cell cell--old">неизвестно</td>
+            </tr>
+            <tr>
+              <td class="row-diff__label row-diff__label--b">report_fixed.csv</td>
+              <td class="row-diff__label row-diff__label--b">16</td>
+              <td class="cell cell--new">непролонгировано</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div></div>
+  </section>
+
+  <script src="./Сравнение_отчётов_files/app.js.Без названия"></script>
+
+</body></html>
