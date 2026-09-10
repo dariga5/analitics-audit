@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Отчёт по проектам</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Отчёт по проектам</h1>
+    <div id="summary" class="summary">Загрузка…</div>
+  </header>
+
+  <section class="filters">
+    <input id="search" type="search" placeholder="Поиск по клиенту / проекту...">
+    <select id="statusFilter"><option value="">Все статусы</option></select>
+    <select id="serviceFilter"><option value="">Все услуги</option></select>
+    <button id="resetBtn" type="button">Сбросить</button>
+  </section>
+
+  <main>
+    <table id="reportTable">
+      <thead>
+        <tr>
+          <th>Client</th>
+          <th>Project</th>
+          <th>Услуга</th>
+          <th>Срок</th>
+          <th>Полёт</th>
+          <th>Начало</th>
+          <th>Конец</th>
+          <th>Активность</th>
+          <th>Статус</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
