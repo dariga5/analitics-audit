@@ -1,372 +1,334 @@
 """
-utils.py — вспомогательные функции для построения отчёта.
-
-Все функции чистые: не читают файлы сами, принимают DataFrame/скаляры,
-возвращают DataFrame/скаляры. Это упрощает тестирование.
+utils.py — вспомогательные утилиты.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 
-
-# ---------- Загрузка ----------
-
-def load_csv(path: str, sep: str = ";") -> pd.DataFrame:
-    """
-    Читает CSV с учётом BOM (utf-8-sig) и разделителя ';'.
-    Все колонки читаем как строки — типы приводим отдельно.
-    """
-    return pd.read_csv(path, sep=sep, encoding="utf-8-sig", dtype=str)
+SOURCE_DIR = Path(__file__).resolve().parent.parent / "source-data"
 
 
-def parse_month_column(df: pd.DataFrame, column: str) -> pd.DataFrame:
+def read_csv(filename: str) -> pd.DataFrame:
+
+    path = Path(filename)
+
+    if not path.is_absolute() and path.parent == Path("."):
+        path = SOURCE_DIR / path
+
+    return pd.read_csv(
+        path, sep=";", 
+        encoding="utf-8-sig",
+        dtype=str, 
+        keep_default_na=False,
+    )
+
+
+# ---------- Загрузка источников данных ----------
+
+def load_works(
+    project_ids: str | list[str],
+    works_path: str | Path | None = None,
+) -> pd.DataFrame:
     """
-    Приводит колонку с месяцем (YYYY-MM-DD) к datetime.
-    pandas.parse_dates с errors='coerce' — некорректные значения станут NaT.
+    Читает works.csv, оставляет строки указанных проектов.
+    project_ids: один id или список (для цепочек).
+    works_path:  путь к works.csv. Если None — source-data/works.csv.
     """
+    if isinstance(project_ids, str):
+        project_ids = [project_ids]
+    project_ids = [str(p) for p in project_ids]
+
+    works = read_csv(works_path if works_path else "works.csv")
+    works = works[works["project_id"].isin(project_ids)].copy()
+
+    return works
+
+def load_project(project_id: str) -> pd.Series | None:
+
+    projects = read_csv("projects.csv")
+    row = projects[projects["project_id"] == str(project_id)]
+    if row.empty:
+        return None
+
+    return row.iloc[0]
+
+def load_term_map() -> dict[str, int]:
+
+    df = read_csv("service_terms.csv")
+
+    return dict(zip(df["service_type"], df["term_months"].astype(int)))
+
+
+# ---------- Парсинг типов ----------
+
+def parse_amount(df: pd.DataFrame, column: str = 'amount') -> pd.DataFrame:
     df = df.copy()
-    df[column] = pd.to_datetime(df[column], errors="coerce")
+    df[column] = pd.to_numeric(df[column], errors='coerce')
+
     return df
 
-
-def parse_amount_column(df: pd.DataFrame, column: str = "amount") -> pd.DataFrame:
-    """amount → числовой тип (float). Ошибки → NaN."""
+def parse_month(df: pd.DataFrame, column: str = 'month') -> pd.DataFrame:
     df = df.copy()
-    df[column] = pd.to_numeric(df[column], errors="coerce")
+    df[column] = pd.to_datetime(df[column], errors='coerce')
+
     return df
 
+def parse_label(df: pd.DataFrame, column: str = "label") -> pd.DataFrame:
+    df = df.copy()
+    df[column] = df[column].fillna("").astype(str).str.lower().str.strip()
+    return df
 
-# ---------- Цепочки проектов ----------
+# ---------- Агрегации ----------
 
-def build_project_chains(history: pd.DataFrame) -> dict[str, list[str]]:
+#По месяцам
+def aggregate_by_month(works: pd.DataFrame) -> pd.DataFrame:
+
+    def combine_part(series):
+        return "дробный платёж" if len(series) > 1 else "основная часть"
+
+    def combine_label(series):
+        parts = [str(x).strip().lower() for x in series if str(x).strip()]
+        return " ".join(parts)
+
+    works = parse_amount(works, "amount")
+
+    monthly = (
+        works.groupby("month", as_index=False)
+        .agg(
+            amount=("amount", "sum"),
+            part=("part", combine_part),
+            label=("label", combine_label),
+        )
+        .sort_values("month")
+        .reset_index(drop=True)
+    )
+
+    monthly["is_stop"] = (monthly["amount"] == 0) | monthly["label"].str.contains("стоп", na=False)
+    monthly["is_end"]  = monthly["label"].str.contains(r"\bend\b", na=False, regex=True)
+
+    return monthly
+
+
+# ---------- Внутрение функции ----------
+def _next_special_after(monthly: pd.DataFrame, month: pd.Timestamp) -> str | None:
     """
-    Строит цепочки переименований из projects_history.
-
-    На входе DataFrame с колонками:
-        project_id, new_project_id, month
-    На выходе dict: {старый_id: [старый_id, ..., новый_id]}
-
-    Пример: 310 -> 311  ==>  {'310': ['310', '311']}
+    Если сразу после `month` в monthly идёт стоп-месяц или end-месяц —
+    возвращает 'отвал' или 'отказ'. Иначе None.
     """
-    chains: dict[str, list[str]] = {}
+    later = monthly[monthly["month"] > month].sort_values("month")
+    if later.empty:
+        return None
 
+    next_row = later.iloc[0]
+    if next_row["is_end"]:
+        return "отказ"
+    if next_row["is_stop"]:
+        return "отвал"
+    return None
+
+
+def _split_consecutive_runs(months: pd.Series) -> list[list[pd.Timestamp]]:
+    """
+    Разбивает отсортированный ряд месяцев на группы подряд идущих.
+    """
+    if len(months) == 0:
+        return []
+
+    runs: list[list[pd.Timestamp]] = [[months.iloc[0]]]
+    for i in range(1, len(months)):
+        prev, curr = months.iloc[i - 1], months.iloc[i]
+        if curr == prev + pd.DateOffset(months=1):
+            runs[-1].append(curr)
+        else:
+            runs.append([curr])
+    return runs
+
+
+def _flight_status(chunk_len: int, term_months: int, has_next: bool) -> str:
+
+    if chunk_len < term_months:
+        return "неизвестно"
+    if has_next:
+        return "пролонгировано"
+    return "непролонгировано"
+
+
+def _service_at(month: pd.Timestamp, timeline: list[dict]) -> dict:
+    current = timeline[0]
+    for entry in timeline:
+        if entry["from"] is None or entry["from"] <= month:
+            current = entry
+        else:
+            break
+    return current
+
+
+def _determine_status(
+    chunk_len: int,
+    term_months: int,
+    has_next: bool,
+    service_type: str,
+    next_special: str | None,
+) -> str:
+    """
+    Финальный статус куска. Приоритет:
+        1. Разовый аудит                → 'завершился'
+        2. Стоп/end сразу после куска   → 'отвал'/'отказ'
+        3. Стандартная логика           → _flight_status
+    """
+    if service_type == "Разовый аудит":
+        return "завершился (разовые работы)"
+    if next_special:
+        return next_special
+    return _flight_status(chunk_len, term_months, has_next)
+
+# ---------- Отслеживание изменений ----------
+
+def build_project_chains() -> dict[str, list[str]]:
+    """
+    Строит цепочки переименований из projects_history.csv.
+
+    """
+    history = read_csv("projects_history.csv")
+
+    edges: dict[str, str] = {}
     for _, row in history.iterrows():
-        old_id = str(row["project_id"])
-        new_id = str(row["new_project_id"])
+        edges[str(row["project_id"])] = str(row["new_project_id"])
 
-        # Если old_id уже где-то в середине цепочки — дополняем её
-        found = False
-        for head, chain in chains.items():
-            if old_id in chain:
-                idx = chain.index(old_id)
-                chains[head] = chain[: idx + 1] + [new_id]
-                found = True
-                break
+    new_ids = set(edges.values())
+    heads = [old for old in edges if old not in new_ids]
 
-        if not found:
-            chains[old_id] = [old_id, new_id]
+    chains: dict[str, list[str]] = {}
+    for head in heads:
+        chain = [head]
+        current = head
+        while current in edges:
+            current = edges[current]
+            chain.append(current)
+        for pid in chain:
+            chains[pid] = chain
 
     return chains
 
 
-def get_chain_for(project_id: str, chains: dict[str, list[str]]) -> list[str]:
-    """Возвращает полную цепочку для project_id (или [project_id])."""
-    for head, chain in chains.items():
-        if project_id in chain:
-            return chain
-    return [project_id]
+def get_project_chain(project_id: str) -> list[str]:
+    """Цепочка для проекта или [project_id], если переименований не было."""
+    chains = build_project_chains()
+    return chains.get(str(project_id), [str(project_id)])
 
 
-def get_current_project_id(chain: list[str]) -> str:
-    """Последний (актуальный) ID в цепочке."""
-    return chain[-1]
 
+def get_service_timeline(project_ids: str | list[str]) -> list[dict]:
+    """Временная линия услуг для проекта (или цепочки проектов)."""
+    if isinstance(project_ids, str):
+        project_ids = [project_ids]
+    project_ids = [str(p) for p in project_ids]
 
-def chain_to_project_ids(chain: list[str]) -> str:
-    """Склеивает цепочку в строку через '|' (как в отчёте)."""
-    return "|".join(chain)
-
-
-# ---------- Работа с works ----------
-
-def aggregate_works_by_month(works: pd.DataFrame) -> pd.DataFrame:
-    """
-    Схлопывает разбитые платежи (например, 'первая часть' + 'вторая часть')
-    в одну строку на (project_id, month).
-
-    Также:
-    - приводит label к нижнему регистру (для поиска 'стоп');
-    - оставляет флаг is_stop.
-    """
-    df = works.copy()
-    df["label"] = df["label"].fillna("").str.lower()
-    df["is_stop"] = df["label"].str.contains("стоп", na=False)
-
-    # Суммируем amount по (project_id, month), сохраняем max(is_stop)
-    grouped = (
-        df.groupby(["project_id", "month"], as_index=False)
-        .agg(amount=("amount", "sum"), is_stop=("is_stop", "max"))
-    )
-    return grouped
-
-
-def filter_works_before(works: pd.DataFrame, report_date: pd.Timestamp) -> pd.DataFrame:
-    """
-    Оставляет только месяцы строго до даты генерации отчёта.
-    Это отсекает 'будущие' оплаты (как у 350 после 2025-09).
-    """
-    return works[works["month"] < report_date].copy()
-
-
-def get_active_months(works: pd.DataFrame) -> list[pd.Timestamp]:
-    """
-    Возвращает отсортированный список месяцев с amount > 0.
-    Месяцы-стопы (amount=0) в активные не попадают.
-    """
-    active = works[works["amount"] > 0]["month"].unique()
-    return sorted(pd.to_datetime(active))
-
-
-def get_stop_months(works: pd.DataFrame) -> set[pd.Timestamp]:
-    """Множество месяцев, помеченных как стоп."""
-    return set(works[works["is_stop"]]["month"].unique())
-
-
-# ---------- Расчёт полётов ----------
-
-def split_periods_by_stops(
-    active_months: list[pd.Timestamp],
-    stop_months: set[pd.Timestamp],
-) -> list[list[pd.Timestamp]]:
-    """
-    Режет список активных месяцев на периоды в местах стопов.
-
-    Логика: если между двумя соседними активными месяцами есть стоп —
-    начинается новый период.
-    """
-    if not active_months:
+    # Актуальный проект — последний в цепочке
+    current_id = project_ids[-1]
+    project = load_project(current_id)
+    if project is None:
         return []
 
-    periods: list[list[pd.Timestamp]] = []
-    current: list[pd.Timestamp] = [active_months[0]]
+    term_map = load_term_map()
+    changes = read_csv("service_changes.csv")
+    changes = changes[changes["project_id"].isin(project_ids)].copy()
 
-    for month in active_months[1:]:
-        prev = current[-1]
-        # есть ли стоп между prev и month?
-        has_stop_between = any(prev < s < month for s in stop_months)
-        if has_stop_between:
-            periods.append(current)
-            current = [month]
-        else:
-            current.append(month)
+    if changes.empty:
+        service = project["service_type"]
+        return [{
+            "from": None,
+            "service_type": service,
+            "term_months": term_map[service],
+        }]
 
-    periods.append(current)
-    return periods
+    changes = parse_month(changes, "month")
+    changes = changes.sort_values("month").reset_index(drop=True)
 
-
-def calculate_flights_for_period(
-    period: list[pd.Timestamp],
-    stop_months: set[pd.Timestamp],
-    term_months: int,
-) -> list[dict]:
-    """
-    Считает полёты внутри одного непрерывного периода активности.
-
-    Возвращает список dict с ключами:
-        flight_no, flight_start, flight_end, last_active_month, has_stop
-    """
-    flights: list[dict] = []
-    flight_no = 1
-    current_start = period[0]
-
-    while True:
-        # Конец полёта: start + term_months - 1 месяц
-        flight_end = current_start + pd.DateOffset(months=term_months) - pd.DateOffset(months=1)
-
-        # Активные месяцы внутри полёта
-        flight_months = [m for m in period if current_start <= m <= flight_end]
-        if not flight_months:
-            break
-
-        last_active = max(flight_months)
-
-        # Был ли стоп внутри полёта?
-        has_stop = any(current_start <= s <= flight_end for s in stop_months)
-
-        flights.append({
-            "flight_no": flight_no,
-            "flight_start": current_start,
-            "flight_end": flight_end,
-            "last_active_month": last_active,
-            "has_stop": has_stop,
+    first = changes.iloc[0]
+    timeline = [{
+        "from": None,
+        "service_type": first["old_service_type"],
+        "term_months": term_map[first["old_service_type"]],
+    }]
+    for _, row in changes.iterrows():
+        timeline.append({
+            "from": row["month"],
+            "service_type": row["new_service_type"],
+            "term_months": term_map[row["new_service_type"]],
         })
 
-        # Следующий полёт начинается с первого активного месяца после last_active
-        next_months = [m for m in period if m > last_active]
-        if not next_months:
-            break
+    return timeline
 
-        current_start = next_months[0]
-        flight_no += 1
-
-    return flights
-
-
-def calculate_flights_for_project(
-    works: pd.DataFrame,
-    term_months: int,
-) -> list[dict]:
+def split_into_flights(monthly: pd.DataFrame, timeline: list[dict]) -> list[dict]:
     """
-    Полный расчёт полётов для проекта:
-    1) режем на периоды по стопам,
-    2) в каждом периоде считаем полёты (нумерация сбрасывается).
+    Режет месячные платежи на полёты с учётом смены услуг и стопов/end.
     """
-    active_months = get_active_months(works)
-    stop_months = get_stop_months(works)
-    periods = split_periods_by_stops(active_months, stop_months)
+    # 1. Активные месяцы
+    active_mask = (monthly["amount"] > 0) & ~monthly["is_stop"] & ~monthly["is_end"]
+    months = monthly[active_mask]["month"].sort_values().reset_index(drop=True)
+    if len(months) == 0:
+        return []
 
-    all_flights: list[dict] = []
-    for period in periods:
-        all_flights.extend(calculate_flights_for_period(period, stop_months, term_months))
+    # 2. Услуга для каждого месяца
+    services = [_service_at(m, timeline) for m in months]
 
-    return all_flights
+    # 3. Разбиваем на runs (пропуск месяца или смена услуги)
+    runs: list[dict] = []
+    current = {"months": [months.iloc[0]], "service": services[0]}
+    for i in range(1, len(months)):
+        prev_m, curr_m = months.iloc[i - 1], months.iloc[i]
+        prev_s, curr_s = services[i - 1], services[i]
 
+        gap = curr_m != prev_m + pd.DateOffset(months=1)
+        change = curr_s["service_type"] != prev_s["service_type"]
 
-# ---------- Статусы ----------
+        if gap or change:
+            runs.append(current)
+            current = {"months": [curr_m], "service": curr_s}
+        else:
+            current["months"].append(curr_m)
+    runs.append(current)
 
-def months_between(later: pd.Timestamp, earlier: pd.Timestamp) -> int:
-    """Число полных месяцев между двумя датами."""
-    return (later.year - earlier.year) * 12 + (later.month - earlier.month)
+    # 4. Режем каждый run на куски по term_months
+    flights: list[dict] = []
+    for run in runs:
+        term = run["service"]["term_months"]
+        service_type = run["service"]["service_type"]
+        chunk_months = run["months"]
 
+        chunks_in_run: list[tuple[list, bool]] = []
+        for start in range(0, len(chunk_months), term):
+            chunk = chunk_months[start:start + term]
+            has_next = start + term < len(chunk_months)
+            chunks_in_run.append((chunk, has_next))
 
-def determine_status(
-    flight: dict,
-    has_next_flight: bool,
-    project_type: str,
-    report_date: pd.Timestamp,
-    unknown_threshold_months: int = 3,
-) -> str:
-    """
-    Определяет статус полёта.
+        for i, (chunk, has_next) in enumerate(chunks_in_run):
+            is_last = i == len(chunks_in_run) - 1
 
-    Приоритет:
-      1. Разовый проект             → 'завершился (разовые работы)'
-      2. Был стоп                   → 'отвал'
-      3. Есть следующий полёт       → 'пролонгировано'
-      4. last_active давно (< N мес) → 'непролонгировано'
-      5. Иначе                      → 'неизвестно'
-    """
-    if project_type == "Разовый":
-        return "завершился (разовые работы)"
-
-    if flight["has_stop"]:
-        return "отвал"
-
-    if has_next_flight:
-        return "пролонгировано"
-
-    delta = months_between(report_date, flight["last_active_month"])
-    if delta <= unknown_threshold_months:
-        return "неизвестно"
-    return "непролонгировано"
-
-
-# ---------- Сборка отчёта ----------
-
-def build_report(
-    projects: pd.DataFrame,
-    works: pd.DataFrame,
-    terms: pd.DataFrame,
-    chains: dict[str, list[str]],
-    report_date: pd.Timestamp,
-    unknown_threshold_months: int = 3,
-) -> pd.DataFrame:
-    """
-    Главная функция: собирает итоговый DataFrame отчёта.
-
-    Шаги:
-      1. Фильтруем works до report_date.
-      2. Для каждого проекта определяем term_months из справочника услуг.
-      3. Объединяем works по всей цепочке проекта (для 310|311 и 320|321).
-      4. Считаем полёты и статусы.
-      5. Собираем строки отчёта.
-    """
-    # 1. Только прошедшие месяцы
-    works = filter_works_before(works, report_date)
-
-    # Справочник term_months по типу услуги
-    term_map = dict(zip(terms["service_type"], terms["term_months"].astype(int)))
-
-    # Приводим project_id к строке для merge
-    projects = projects.copy()
-    works = works.copy()
-    projects["project_id"] = projects["project_id"].astype(str)
-    works["project_id"] = works["project_id"].astype(str)
-
-    # Какие project_id встречаются в works?
-    all_project_ids = set(works["project_id"].unique())
-
-    # Строим отчёт
-    rows: list[dict] = []
-    processed_chains: set[tuple[str, ...]] = set()
-
-    for project_id in sorted(all_project_ids):
-        chain = get_chain_for(project_id, chains)
-        chain_key = tuple(chain)
-        if chain_key in processed_chains:
-            continue
-        processed_chains.add(chain_key)
-
-        current_id = get_current_project_id(chain)
-
-        # Информация о текущем проекте
-        proj_row = projects[projects["project_id"] == current_id]
-        if proj_row.empty:
-            # Проект есть в works, но нет в справочнике — пропускаем с предупреждением
-            print(f"[WARN] Проект {current_id} отсутствует в projects.csv — пропущен")
-            continue
-
-        proj_row = proj_row.iloc[0]
-        project_name = proj_row["project_name"]
-        service_type = proj_row["service_type"]
-        project_type = proj_row["project_type"]
-        term_months = int(proj_row["term_months"]) if pd.notna(proj_row["term_months"]) \
-            else term_map.get(service_type, 1)
-
-        # Объединяем works по всей цепочке
-        chain_works = works[works["project_id"].isin(chain)].copy()
-        if chain_works.empty:
-            continue
-
-        # Агрегируем по месяцу (сумма по всей цепочке)
-        chain_works = (
-            chain_works.groupby("month", as_index=False)
-            .agg(amount=("amount", "sum"), is_stop=("is_stop", "max"))
-        )
-
-        flights = calculate_flights_for_project(chain_works, term_months)
-        if not flights:
-            continue
-
-        # Определяем статусы (следующий полёт известен заранее)
-        for idx, flight in enumerate(flights):
-            has_next = idx < len(flights) - 1
-            status = determine_status(
-                flight, has_next, project_type, report_date, unknown_threshold_months
+            # Смотрим "после куска" только для последнего куска run
+            next_special = (
+                _next_special_after(monthly, chunk[-1]) if is_last else None
             )
 
-            rows.append({
-                "client_id": current_id,
-                "project_ids": chain_to_project_ids(chain),
-                "project_name": project_name,
+            status = _determine_status(
+                chunk_len=len(chunk),
+                term_months=term,
+                has_next=has_next,
+                service_type=service_type,
+                next_special=next_special,
+            )
+
+            flights.append({
+                "flight_no": len(flights) + 1,
+                "flight_start": chunk[0],
+                "flight_end": chunk[0] + pd.DateOffset(months=term - 1),
+                "last_active_month": chunk[-1],
                 "service_type": service_type,
-                "term_months": term_months,
-                "flight_no": flight["flight_no"],
-                "flight_start": flight["flight_start"].strftime("%Y-%m-%d"),
-                "flight_end": flight["flight_end"].strftime("%Y-%m-%d"),
-                "last_active_month": flight["last_active_month"].strftime("%Y-%m-%d"),
+                "term_months": term,
                 "status": status,
-                "report_generated_at": report_date.strftime("%Y-%m-%d"),
             })
 
-    return pd.DataFrame(rows)
+    return flights
