@@ -213,6 +213,19 @@ def build_project_chains() -> dict[str, list[str]]:
 
     return chains
 
+def get_last_payment_month(works_path: str | Path | None = None) -> pd.Timestamp | None:
+    """
+    Возвращает самый поздний месяц из works.csv.
+
+    Если файл пуст — None.
+    Используется как дефолтная дата отчёта.
+    """
+    works = read_csv(works_path if works_path else "works.csv")
+    if works.empty:
+        return None
+    months = pd.to_datetime(works["month"], errors="coerce")
+    
+    return months.max()
 
 def get_project_chain(project_id: str) -> list[str]:
     """Цепочка для проекта или [project_id], если переименований не было."""
@@ -330,6 +343,7 @@ def split_into_flights(monthly: pd.DataFrame, timeline: list[dict]) -> list[dict
                 "service_type": service_type,
                 "term_months": term,
                 "status": status,
+                "note": "требует уточнения" if status == "неизвестно" else "",
             })
 
     return flights

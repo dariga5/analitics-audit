@@ -1,9 +1,11 @@
 """
 report_generator.py — собирает отчёт по всем клиентам.
+
 Использование:
-    python utils/report_generator.py 2025-09-01
-    python utils/report_generator.py 2025-09-01 -o ../source-data/report_fixed.csv
-    python utils/report_generator.py 2025-09-01 --works ./works_custom.csv
+    python report_generator.py                          # все данные, без фильтра
+    python report_generator.py 2025-09-01               # фильтр: месяц < 2025-09-01
+    python report_generator.py 2025-09-01 -o out.csv
+    python report_generator.py --works ./works_custom.csv
 """
 from __future__ import annotations
 
@@ -13,11 +15,24 @@ from pathlib import Path
 
 import pandas as pd
 
-from utils import SOURCE_DIR, read_csv, build_project_chains
+from utils import (
+    SOURCE_DIR,
+    read_csv,
+    build_project_chains,
+    get_last_payment_month,
+)
 from client_report import build_client_report, REPORT_COLUMNS
 
 
 def find_all_client_chains() -> list[list[str]]:
+    """
+    Возвращает уникальные цепочки клиентов из projects.csv.
+
+    Пример: [['301'], ['302'], ..., ['310', '311'], ['320', '321'], ['330'], ...]
+
+    Цепочки вида ['310', '311'] и ['311'] не дублируются — мы отслеживаем
+    уже встреченные кортежи в `seen`.
+    """
     projects = read_csv("projects.csv")
     chains_map = build_project_chains()
 
@@ -37,11 +52,17 @@ def find_all_client_chains() -> list[list[str]]:
 
 def generate_full_report(
     works_path: str | Path,
-    report_generated_at: pd.Timestamp | str,
+    report_generated_at: pd.Timestamp | str | None = None,
 ) -> pd.DataFrame:
     """
     Проходит по всем клиентам из projects.csv, строит отчёт для каждого,
     склеивает в один DataFrame.
+
+    Параметры:
+        works_path          — путь к works.csv
+        report_generated_at — дата отчёта.
+                              • Если задана — фильтр `month < дата`.
+                              • Если None — все данные без фильтра.
 
     Пустые отчёты (нет оплат) не попадают в результат.
     """
@@ -74,7 +95,11 @@ def main() -> int:
     )
     parser.add_argument(
         "report_generated_at",
-        help="Дата отчёта YYYY-MM-DD (месяцы строго до неё)",
+        nargs="?",
+        default=None,
+        help="Дата отчёта YYYY-MM-DD. "
+             "Если не указана — берётся последний месяц из works.csv, "
+             "фильтр по дате НЕ применяется.",
     )
     parser.add_argument(
         "-o", "--output",
@@ -94,6 +119,24 @@ def main() -> int:
     )
     works_path = args.works if args.works else "works.csv"
 
+    # Диагностика — если пользователь не задал дату, покажем,
+    # какую используем в отчёте (и что фильтр НЕ применяется).
+    if args.report_generated_at is None:
+        last = get_last_payment_month(works_path)
+        if last is None:
+            print("Ошибка: works.csv пуст — не могу определить дату отчёта",
+                  file=sys.stderr)
+            return 1
+        print(
+            f"report_generated_at не указан — "
+            f"использую последний месяц {last.strftime('%Y-%m-%d')} "
+            f"без фильтра",
+            file=sys.stderr,
+        )
+
+    # Передаём «как есть» — None означает «без фильтра»,
+    # явная дата — «отфильтровать month < дата».
+    # Разбором занимается build_client_report.
     df = generate_full_report(
         works_path=works_path,
         report_generated_at=args.report_generated_at,
