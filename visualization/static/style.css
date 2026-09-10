@@ -7,78 +7,313 @@ body {
   background: #f9fafb;
 }
 
+
+/* =============================================================
+   Header
+   ============================================================= */
+
 header {
   padding: 24px 32px 12px;
   background: #fff;
   border-bottom: 1px solid #e5e7eb;
 }
 
-h1 { margin: 0 0 12px; font-size: 22px; }
+h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
 
-.summary { display: flex; gap: 16px; flex-wrap: wrap; color: #4b5563; font-size: 13px; }
-.summary b { color: #111827; }
+.hint {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+}
 
-.filters {
+
+/* =============================================================
+   Drop zones
+   ============================================================= */
+
+.drops {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 24px 32px 8px;
+}
+
+.drop {
+  border: 2px dashed #d1d5db;
+  border-radius: 12px;
+  padding: 32px 16px;
+  text-align: center;
+  background: #fff;
+  cursor: pointer;
+  transition: all .15s;
+}
+
+.drop:hover {
+  border-color: #9ca3af;
+}
+
+.drop.dragover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.drop.loaded {
+  border-style: solid;
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+
+.drop__label {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.drop__filename {
+  color: #6b7280;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+
+/* =============================================================
+   Actions
+   ============================================================= */
+
+.actions {
   display: flex;
   gap: 12px;
+  align-items: center;
   padding: 16px 32px;
+}
+
+button {
+  padding: 10px 20px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.status {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+
+/* =============================================================
+   Result
+   ============================================================= */
+
+.result {
+  padding: 8px 32px 40px;
+}
+
+.hidden {
+  display: none;
+}
+
+.summary {
+  display: flex;
+  gap: 24px;
+  padding: 16px 20px;
   background: #fff;
-  border-bottom: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+  margin-bottom: 20px;
   flex-wrap: wrap;
 }
 
-.filters input,
-.filters select,
-.filters button {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
-  background: #fff;
-  color: inherit;
+.summary b {
+  color: #111827;
 }
 
-.filters input { min-width: 260px; }
-.filters button { cursor: pointer; background: #f3f4f6; }
-.filters button:hover { background: #e5e7eb; }
 
-main { padding: 16px 32px 40px; }
+/* =============================================================
+   Blocks
+   ============================================================= */
+
+.block {
+  margin-bottom: 24px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+  overflow: hidden;
+}
+
+.block__title {
+  padding: 12px 16px;
+  font-weight: 600;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.block--only-a .block__title {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.block--only-b .block__title {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.block--diff .block__title {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.block--empty .block__title {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+
+/* =============================================================
+   Tables with horizontal scroll
+   ============================================================= */
+
+.table-wrap {
+  overflow-x: auto;
+}
 
 table {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0,0,0,.05);
 }
 
 th, td {
-  padding: 10px 12px;
+  padding: 8px 12px;
   text-align: left;
   border-bottom: 1px solid #f1f3f5;
+  font-size: 13px;
   white-space: nowrap;
 }
 
 th {
-  background: #f3f4f6;
+  background: #f9fafb;
   font-weight: 600;
-  font-size: 13px;
   color: #374151;
 }
 
-tbody tr:hover { background: #f9fafb; }
+tr:hover td {
+  background: #f9fafb;
+}
 
-.status {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
+
+/* =============================================================
+   Row numbers
+   ============================================================= */
+
+.row-num {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 12px;
+  color: #6b7280;
+  text-align: right;
+  padding-right: 16px;
+  width: 60px;
+}
+
+
+/* =============================================================
+   Row diff
+   ============================================================= */
+
+.row-diff {
+  border-bottom: 1px solid #f1f3f5;
+  padding: 8px 0 12px;
+}
+
+.row-diff:last-child {
+  border-bottom: none;
+}
+
+.row-diff__key {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 8px 16px 4px;
+  font-size: 12px;
+}
+
+.row-diff__key-label {
+  font-weight: 600;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: #4b5563;
+}
+
+.row-diff__row-nums {
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.row-diff .table-wrap {
+  padding: 0 16px;
+}
+
+.row-diff__table th,
+.row-diff__table td {
+  padding: 6px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.row-diff__table th {
+  background: #f9fafb;
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.row-diff__label {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.row-diff__table .row-diff__label {
+  width: auto;
+  text-align: left;
+  color: #9ca3af;
+}
+
+.row-diff__label--a {
+  background: #fef3c7;
+  color: #92400e !important;
+}
+
+.row-diff__label--b {
+  background: #dbeafe;
+  color: #1e40af !important;
+}
+
+.row-diff__table .cell--old {
+  background: #fef2f2;
+  color: #991b1b;
   font-weight: 500;
 }
 
-.status--пролонгировано   { background: #d1fae5; color: #065f46; }
-.status--непролонгировано { background: #fee2e2; color: #991b1b; }
-.status--отвал            { background: #fef3c7; color: #92400e; }
-.status--неизвестно       { background: #e0e7ff; color: #3730a3; }
-.status--разовые          { background: #e5e7eb; color: #374151; }
+.row-diff__table .cell--new {
+  background: #ecfdf5;
+  color: #065f46;
+  font-weight: 500;
+}

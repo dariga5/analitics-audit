@@ -1,117 +1,247 @@
-// Состояние страницы (единственный источник правды для фильтров).
+// =============================================================
+// app.js — сравнение двух отчётов
+// =============================================================
+
 const state = {
-  rows: [],
-  filtered: [],
-  search: "",
-  status: "",
-  service: "",
+  fileA: null,
+  fileB: null,
+  nameA: "Отчёт A",
+  nameB: "Отчёт B",
 };
 
-async function loadReport() {
+// --- DOM ---
+const dropA = document.getElementById("dropA");
+const dropB = document.getElementById("dropB");
+const inputA = document.getElementById("fileA");
+const inputB = document.getElementById("fileB");
+const nameAEl = document.getElementById("nameA");
+const nameBEl = document.getElementById("nameB");
+const compareBtn = document.getElementById("compareBtn");
+const statusEl = document.getElementById("status");
+const result = document.getElementById("result");
+const summary = document.getElementById("summary");
+const diffBlocks = document.getElementById("diffBlocks");
+
+
+// =============================================================
+// Drag & Drop
+// =============================================================
+
+function setupDrop(drop, input, nameEl, slotKey) {
+  drop.addEventListener("click", e => {
+    if (e.target !== input) input.click();
+  });
+
+  input.addEventListener("change", e => {
+    const file = e.target.files && e.target.files[0];
+    if (file) setFile(slotKey, file, drop, nameEl);
+  });
+
+  drop.addEventListener("dragenter", e => {
+    e.preventDefault();
+    e.stopPropagation();
+    drop.classList.add("dragover");
+  });
+
+  drop.addEventListener("dragover", e => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+    drop.classList.add("dragover");
+  });
+
+  drop.addEventListener("dragleave", e => {
+    e.preventDefault();
+    e.stopPropagation();
+    drop.classList.remove("dragover");
+  });
+
+  drop.addEventListener("drop", e => {
+    e.preventDefault();
+    e.stopPropagation();
+    drop.classList.remove("dragover");
+
+    const files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files.length > 0) {
+      setFile(slotKey, files[0], drop, nameEl);
+    }
+  });
+}
+
+function setFile(slot, file, drop, nameEl) {
+  const key = slot === "a" ? "fileA" : "fileB";
+  const nameKey = slot === "a" ? "nameA" : "nameB";
+  state[key] = file;
+  state[nameKey] = file.name;
+  nameEl.textContent = file.name;
+  drop.classList.add("loaded");
+  updateCompareButton();
+  console.log(`[setFile] slot=${slot} name=${file.name} size=${file.size}`);
+}
+
+function updateCompareButton() {
+  compareBtn.disabled = !(state.fileA && state.fileB);
+}
+
+["dragover", "drop"].forEach(ev => {
+  window.addEventListener(ev, e => e.preventDefault(), false);
+});
+
+
+// =============================================================
+// Compare
+// =============================================================
+
+compareBtn.addEventListener("click", async () => {
+  if (!state.fileA || !state.fileB) return;
+
+  compareBtn.disabled = true;
+  statusEl.textContent = "Сравнение...";
+  result.classList.add("hidden");
+
   try {
-    const [reportRes, summaryRes] = await Promise.all([
-      fetch("/api/report"),
-      fetch("/api/summary"),
-    ]);
-    if (!reportRes.ok || !summaryRes.ok) throw new Error("bad response");
+    const form = new FormData();
+    form.append("file_a", state.fileA);
+    form.append("file_b", state.fileB);
 
-    state.rows = await reportRes.json();
-    const summary = await summaryRes.json();
+    const resp = await fetch("/api/compare", { method: "POST", body: form });
+    if (!resp.ok) throw new Error(await resp.text());
 
-    renderSummary(summary);
-    setupFilters(state.rows);
-    applyFilters();
+    const data = await resp.json();
+    renderResult(data);
+    statusEl.textContent = "";
   } catch (err) {
-    document.getElementById("summary").innerHTML =
-      `<span style="color:#991b1b">Ошибка загрузки данных: ${err.message}</span>`;
+    statusEl.textContent = "Ошибка: " + err.message;
+  } finally {
+    compareBtn.disabled = false;
   }
+});
+
+
+// =============================================================
+// Rendering
+// =============================================================
+
+const ALL_COLUMNS = [
+  "client_id", "project_ids", "project_name", "service_type",
+  "term_months", "flight_no", "flight_start", "flight_end",
+  "last_active_month", "status", "report_generated_at",
+];
+
+function renderResult(data) {
+  result.classList.remove("hidden");
+  renderSummary(data.summary);
+  diffBlocks.innerHTML =
+    renderOnlyIn(state.nameA, data.only_in_a, "block--only-a") +
+    renderOnlyIn(state.nameB, data.only_in_b, "block--only-b") +
+    renderDifferent(data.different);
 }
 
 function renderSummary(s) {
-  const statuses = Object.entries(s.by_status)
-    .map(([k, v]) => `${escapeHtml(k)}: <b>${v}</b>`)
-    .join(" · ");
-  document.getElementById("summary").innerHTML =
-    `Всего строк: <b>${s.total_rows}</b> · Клиентов: <b>${s.total_clients}</b> · ${statuses}`;
+  summary.innerHTML = `
+    <div>Строк в <b>${esc(state.nameA)}</b>: <b>${s.total_a}</b></div>
+    <div>Строк в <b>${esc(state.nameB)}</b>: <b>${s.total_b}</b></div>
+    <div>Только в A: <b>${s.only_in_a}</b></div>
+    <div>Только в B: <b>${s.only_in_b}</b></div>
+    <div>Расхождений: <b>${s.different}</b></div>
+    <div>Совпало: <b>${s.same}</b></div>
+  `;
 }
 
-function setupFilters(rows) {
-  const statusSel = document.getElementById("statusFilter");
-  const serviceSel = document.getElementById("serviceFilter");
-
-  [...new Set(rows.map(r => r.status))].sort().forEach(s => {
-    statusSel.insertAdjacentHTML("beforeend",
-      `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`);
-  });
-  [...new Set(rows.map(r => r.service_type))].sort().forEach(s => {
-    serviceSel.insertAdjacentHTML("beforeend",
-      `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`);
-  });
-
-  document.getElementById("search").addEventListener("input", e => {
-    state.search = e.target.value.trim().toLowerCase();
-    applyFilters();
-  });
-  statusSel.addEventListener("change", e => { state.status = e.target.value; applyFilters(); });
-  serviceSel.addEventListener("change", e => { state.service = e.target.value; applyFilters(); });
-  document.getElementById("resetBtn").addEventListener("click", () => {
-    state.search = ""; state.status = ""; state.service = "";
-    document.getElementById("search").value = "";
-    statusSel.value = "";
-    serviceSel.value = "";
-    applyFilters();
-  });
-}
-
-function applyFilters() {
-  const { rows, search, status, service } = state;
-  state.filtered = rows.filter(r => {
-    if (status && r.status !== status) return false;
-    if (service && r.service_type !== service) return false;
-    if (search) {
-      const hay = `${r.client_id} ${r.project_name} ${r.project_ids} ${r.service_type}`.toLowerCase();
-      if (!hay.includes(search)) return false;
-    }
-    return true;
-  });
-  renderTable(state.filtered);
-}
-
-// Возвращает CSS-класс для плашки статуса.
-function statusClass(status) {
-  const s = status.toLowerCase();
-  if (s.includes("непролонгировано")) return "status--непролонгировано";
-  if (s.includes("пролонгировано"))   return "status--пролонгировано";
-  if (s.includes("отвал"))            return "status--отвал";
-  if (s.includes("неизвестно"))       return "status--неизвестно";
-  return "status--разовые";
-}
-
-function renderTable(rows) {
-  const tbody = document.querySelector("#reportTable tbody");
-  if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#6b7280">Нет данных</td></tr>`;
-    return;
+function renderOnlyIn(fileName, rows, cssClass) {
+  if (!rows || rows.length === 0) {
+    return `<div class="block block--empty">
+      <div class="block__title">Только в «${esc(fileName)}»: нет</div>
+    </div>`;
   }
-  tbody.innerHTML = rows.map(r => `
+
+  const header = `<th>строка</th>` +
+    ALL_COLUMNS.map(c => `<th>${esc(c)}</th>`).join("");
+  const body = rows.map(r => `
     <tr>
-      <td>${escapeHtml(r.client_id)}</td>
-      <td title="${escapeHtml(r.project_ids)}">${escapeHtml(r.project_name)}</td>
-      <td>${escapeHtml(r.service_type)}</td>
-      <td>${r.term_months}</td>
-      <td>${r.flight_no}</td>
-      <td>${r.flight_start}</td>
-      <td>${r.flight_end}</td>
-      <td>${r.last_active_month}</td>
-      <td><span class="status ${statusClass(r.status)}">${escapeHtml(r.status)}</span></td>
+      <td class="row-num">${r.row_num ?? "—"}</td>
+      ${ALL_COLUMNS.map(c => `<td>${esc(r[c])}</td>`).join("")}
     </tr>
   `).join("");
+
+  return `<div class="block ${cssClass}">
+    <div class="block__title">Только в «${esc(fileName)}» (${rows.length})</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>${header}</tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  </div>`;
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+function renderDifferent(rows) {
+  if (!rows || rows.length === 0) {
+    return `<div class="block block--empty">
+      <div class="block__title">Расхождения: нет</div>
+    </div>`;
+  }
+
+  const items = rows.map(r => {
+    const headerCells = r.fields.map(f => `<th>${esc(f.column)}</th>`).join("");
+
+    const valueA = r.fields.map(f =>
+      `<td class="cell cell--old">${esc(f.value_a)}</td>`).join("");
+    const valueB = r.fields.map(f =>
+      `<td class="cell cell--new">${esc(f.value_b)}</td>`).join("");
+
+    return `<div class="row-diff">
+      <div class="row-diff__key">
+        <span class="row-diff__key-label">${esc(r.key)}</span>
+        <span class="row-diff__row-nums">
+          строка ${r.row_num_a} в «${esc(state.nameA)}» ·
+          строка ${r.row_num_b} в «${esc(state.nameB)}»
+        </span>
+      </div>
+      <div class="table-wrap">
+        <table class="row-diff__table">
+          <thead>
+            <tr>
+              <th class="row-diff__label">файл</th>
+              <th class="row-diff__label">№</th>
+              ${headerCells}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row-diff__label row-diff__label--a">${esc(state.nameA)}</td>
+              <td class="row-diff__label row-diff__label--a">${r.row_num_a}</td>
+              ${valueA}
+            </tr>
+            <tr>
+              <td class="row-diff__label row-diff__label--b">${esc(state.nameB)}</td>
+              <td class="row-diff__label row-diff__label--b">${r.row_num_b}</td>
+              ${valueB}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join("");
+
+  return `<div class="block block--diff">
+    <div class="block__title">Расхождения (${rows.length})</div>
+    ${items}
+  </div>`;
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
 }
 
-loadReport();
+
+// =============================================================
+// Init
+// =============================================================
+
+setupDrop(dropA, inputA, nameAEl, "a");
+setupDrop(dropB, inputB, nameBEl, "b");
+
+console.log("[init] app.js loaded");

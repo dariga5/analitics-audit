@@ -3,40 +3,37 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Отчёт по проектам</title>
+  <title>Сравнение отчётов</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>Отчёт по проектам</h1>
-    <div id="summary" class="summary">Загрузка…</div>
+    <h1>Сравнение двух отчётов</h1>
+    <p class="hint">Перетащите CSV в обе зоны и нажмите «Сравнить».</p>
   </header>
 
-  <section class="filters">
-    <input id="search" type="search" placeholder="Поиск по клиенту / проекту...">
-    <select id="statusFilter"><option value="">Все статусы</option></select>
-    <select id="serviceFilter"><option value="">Все услуги</option></select>
-    <button id="resetBtn" type="button">Сбросить</button>
+  <section class="drops">
+    <div class="drop" id="dropA" data-slot="a">
+      <input type="file" id="fileA" accept=".csv" hidden>
+      <div class="drop__label">Отчёт A</div>
+      <div class="drop__filename" id="nameA">Перетащите файл или кликните</div>
+    </div>
+    <div class="drop" id="dropB" data-slot="b">
+      <input type="file" id="fileB" accept=".csv" hidden>
+      <div class="drop__label">Отчёт B</div>
+      <div class="drop__filename" id="nameB">Перетащите файл или кликните</div>
+    </div>
   </section>
 
-  <main>
-    <table id="reportTable">
-      <thead>
-        <tr>
-          <th>Client</th>
-          <th>Project</th>
-          <th>Услуга</th>
-          <th>Срок</th>
-          <th>Полёт</th>
-          <th>Начало</th>
-          <th>Конец</th>
-          <th>Активность</th>
-          <th>Статус</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </main>
+  <section class="actions">
+    <button id="compareBtn" disabled>Сравнить</button>
+    <span id="status" class="status"></span>
+  </section>
+
+  <section id="result" class="result hidden">
+    <div id="summary" class="summary"></div>
+    <div id="diffBlocks"></div>
+  </section>
 
   <script src="app.js"></script>
 </body>

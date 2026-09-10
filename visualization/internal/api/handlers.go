@@ -1,49 +1,66 @@
-// Package api регистрирует HTTP-ручки.
+// Package api — HTTP-ручки.
 package api
 
 import (
-	"log"
-
 	"encoding/json"
+
+	"log"
 	"net/http"
 
 	"visualization/internal/report"
 )
 
-// Handler держит ссылку на репозиторий и раздаёт данные по HTTP.
-type Handler struct {
-	repo *report.Repository
+type Handler struct{}
+
+func NewHandler() *Handler {
+	return &Handler{}
 }
 
-func NewHandler(repo *report.Repository) *Handler {
-	return &Handler{repo: repo}
-}
-
-// Register вешает ручки на переданный mux.
 func (h *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("/api/report", h.handleReport)
-	mux.HandleFunc("/api/summary", h.handleSummary)
+	mux.HandleFunc("/api/compare", h.handleCompare)
 	mux.HandleFunc("/api/health", h.handleHealth)
 }
 
-func (h *Handler) handleReport(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.repo.Load()
-	if err != nil {
-		log.Printf("load report: %v", err)
-		http.Error(w, "failed to load report", http.StatusInternalServerError)
+// handleCompare принимает multipart-форму с двумя файлами: file_a, file_b.
+// Возвращает JSON с результатом сравнения.
+func (h *Handler) handleCompare(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	writeJSON(w, rows)
-}
 
-func (h *Handler) handleSummary(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.repo.Load()
-	if err != nil {
-		log.Printf("load report: %v", err)
-		http.Error(w, "failed to load report", http.StatusInternalServerError)
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10 MB
+		http.Error(w, "cannot parse form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, h.repo.Summarize(rows))
+
+	fileA, _, err := r.FormFile("file_a")
+	if err != nil {
+		http.Error(w, "missing file_a", http.StatusBadRequest)
+		return
+	}
+	defer fileA.Close()
+
+	fileB, _, err := r.FormFile("file_b")
+	if err != nil {
+		http.Error(w, "missing file_b", http.StatusBadRequest)
+		return
+	}
+	defer fileB.Close()
+
+	rowsA, err := report.ParseCSV(fileA)
+	if err != nil {
+		http.Error(w, "parse file_a: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	rowsB, err := report.ParseCSV(fileB)
+	if err != nil {
+		http.Error(w, "parse file_b: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	result := report.Compare(rowsA, rowsB)
+	writeJSON(w, result)
 }
 
 func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
