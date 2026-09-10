@@ -35,17 +35,8 @@ def build_client_report(
     client_id: str,
     report_generated_at: pd.Timestamp | str,
 ) -> pd.DataFrame:
-    """
-    Строит отчёт по одному клиенту.
 
-    Параметры:
-        works_path          — путь к works.csv
-        client_id           — ID клиента (любое звено цепочки)
-        report_generated_at — дата отчёта. Учитываются месяцы строго до неё.
 
-    Возвращает DataFrame с колонками REPORT_COLUMNS.
-    Если данных нет — пустой DataFrame с теми же колонками.
-    """
     report_generated_at = pd.Timestamp(report_generated_at)
 
     # 1. Цепочка переименований
