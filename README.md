@@ -30,7 +30,7 @@ goreport/
 │   ├── service_changes.csv
 │   ├── service_terms.csv
 │   ├── works.csv
-│   ├── report.csv              # образец формата (не эталон значений)
+│   ├── report.csv              # образец формата
 │   └── report_fixed.csv        # результат работы аналитики
 │
 ├── utils/                      # аналитические скрипты
