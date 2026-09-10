@@ -42,13 +42,13 @@ goreport/
 │   ├── cmd/server/main.go      # точка входа
 │   ├── internal/
 │   │   ├── api/handlers.go     # HTTP-ручки
-│   │   └── report/             # чтение CSV и сравнение
+│   │   └── report/*            # чтение CSV и сравнение
 │   ├── pkg/models/report.go    # структуры данных
 │   ├── static/                 # HTML/CSS/JS
 │   └── go.mod
 │
-├── AUDIT.md                    # аудит задачи: проблемы, допущения, вопросы
-└── README.md                   # этот файл
+├── AUDIT.md
+└── README.md              
 ```
 
 ---
