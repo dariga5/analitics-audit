@@ -1,6 +1,5 @@
 """
 report_generator.py — собирает отчёт по всем клиентам.
-
 Использование:
     python utils/report_generator.py 2025-09-01
     python utils/report_generator.py 2025-09-01 -o ../source-data/report_fixed.csv
