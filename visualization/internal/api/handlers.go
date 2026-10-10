@@ -58,11 +58,11 @@ func (h *Handler) handleCompare(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "parse file_b: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-
+                                 
 	result := report.Compare(rowsA, rowsB)
 	writeJSON(w, result)
 }
-
+                                         
 func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"status": "ok"})
 }
@@ -71,5 +71,5 @@ func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		log.Printf("encode json: %v", err)
-	}
+	}                                           
 }
